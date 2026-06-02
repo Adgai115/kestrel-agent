@@ -42,6 +42,10 @@ export class NodeSandbox implements SandboxExecutor {
 
     const timeoutMs = config.timeoutMs ?? 30_000;
     const startTime = Date.now();
+    if (timeoutMs <= 0) {
+      return { exitCode: null, stdout: "", stderr: "", timedOut: true, durationMs: Date.now() - startTime };
+    }
+
     const shell = config.shell ?? (process.platform === "win32" ? "cmd.exe" : "/bin/sh");
     const shellArgs = process.platform === "win32" ? ["/c", config.command] : ["-c", config.command];
     const env = minimalEnv(config.env);
