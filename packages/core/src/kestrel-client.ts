@@ -107,6 +107,13 @@ export async function* streamChat(
   tools?: OpenAIToolDef[],
 ): AsyncGenerator<KestrelClientEvent> {
   const provider = config.provider ?? resolveProvider(config.model);
+  if (provider === "anthropic" || provider === "google") {
+    yield {
+      type: "error",
+      message: `Provider "${provider}" is not OpenAI-compatible. Use KESTREL_PROVIDER=deepseek or openai.`,
+    };
+    return;
+  }
   const { baseUrl, endpoint, headers: providerHeaders } = getProviderConfig(provider, config);
 
   const body: Record<string, unknown> = {

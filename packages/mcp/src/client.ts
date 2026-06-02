@@ -88,6 +88,8 @@ export interface McpServerConfig {
   cwd?: string;
   /** Connection timeout in ms. Default: 10_000 */
   connectTimeout?: number;
+  /** Per-request call timeout in ms. Default: 30_000 */
+  callTimeout?: number;
 }
 
 interface JsonRpcRequest {
@@ -120,7 +122,7 @@ export class McpClient {
   readonly config: McpServerConfig;
 
   constructor(config: McpServerConfig) {
-    this.config = { connectTimeout: 10_000, args: [], ...config };
+    this.config = { connectTimeout: 10_000, callTimeout: 30_000, args: [], ...config };
   }
 
   get connected(): boolean {
@@ -178,7 +180,10 @@ export class McpClient {
       // stderr from MCP servers is for logging, not protocol
     });
 
+    let exited = false;
     const exitHandler = () => {
+      if (exited) return;
+      exited = true;
       this._connected = false;
       this._rejectAllPending(new Error("MCP server process exited"));
     };
@@ -235,10 +240,12 @@ export class McpClient {
       const id = this.nextId++;
       const request: JsonRpcRequest = { jsonrpc: "2.0", method, params, id };
 
+      const isConnect = method === "initialize" || method === "tools/list";
+      const timeoutMs = isConnect ? (this.config.connectTimeout ?? 10_000) : (this.config.callTimeout ?? 30_000);
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`MCP request timed out: ${method}`));
-      }, this.config.connectTimeout ?? 10_000);
+      }, timeoutMs);
 
       this.pending.set(id, {
         resolve: (v) => {

@@ -19,6 +19,8 @@ export interface KestrelConfig {
   dbPath: string;
   /** Root data directory. Default: KESTREL_HOME ?? .kestrel */
   dataDir: string;
+  /** Max conversation turns. Default: KESTREL_MAX_TURNS ?? 50 */
+  maxTurns: number;
 }
 
 /** Resolve the data directory from KESTREL_HOME env var, project-local .kestrel, or ~/.kestrel. */
@@ -38,11 +40,12 @@ export function loadConfig(overrides?: Partial<KestrelConfig>): KestrelConfig {
     apiKey: process.env.KESTREL_API_KEY ?? "",
     gateway: {
       host: process.env.KESTREL_GATEWAY_HOST ?? "127.0.0.1",
-      port: Number(process.env.KESTREL_GATEWAY_PORT) || 3100,
-      token: process.env.KESTREL_GATEWAY_TOKEN ?? "",
+      port: Number(process.env.KESTREL_GATEWAY_PORT ?? process.env.KESTREL_PORT) || 3100,
+      token: process.env.KESTREL_GATEWAY_TOKEN ?? process.env.KESTREL_TOKEN ?? "",
     },
     dbPath: process.env.KESTREL_DB_PATH ?? `${resolveDataDir()}/kestrel.db`,
     dataDir: resolveDataDir(),
+    maxTurns: Number(process.env.KESTREL_MAX_TURNS) || 50,
     ...overrides,
   };
 }

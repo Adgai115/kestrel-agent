@@ -92,6 +92,33 @@ export interface CronJob {
 
 export type CronEventHandler = (job: CronJob, result: { ok: boolean; output: string }) => void;
 
+/** Parse a cron field like "1-5", "0,6", "15" into a Set of allowed values. */
+function parseField(field: string, _min: number, _max: number): Set<number> | null {
+  if (field === "*") return null;
+  const values = new Set<number>();
+  for (const part of field.split(",")) {
+    if (part.includes("-")) {
+      const [lo, hi] = part.split("-").map(Number);
+      for (let i = lo!; i <= hi!; i++) values.add(i);
+    } else {
+      values.add(Number(part));
+    }
+  }
+  return values;
+}
+
+/** Check if a cron field matches a value. */
+function matchField(field: string, value: number): boolean {
+  if (field === "*") return true;
+  return field.split(",").some((p) => {
+    if (p.includes("-")) {
+      const [lo, hi] = p.split("-").map(Number);
+      return value >= lo! && value <= hi!;
+    }
+    return Number(p) === value;
+  });
+}
+
 /**
  * In-process cron scheduler.
  * Manages jobs and fires them on schedule via interval polling.
@@ -171,56 +198,85 @@ export class CronScheduler {
     }
   }
 
-  private async fireJob(job: CronJob): Promise<void> {
+  private fireJob(job: CronJob): void {
     job.lastRun = Date.now();
     job.runCount++;
     job.nextRun = this.computeNextRun(job.cronExpression);
 
-    // Execute command via execSync as a simple approach
-    const { execSync } = await import("node:child_process");
-    try {
-      const output = execSync(job.command, {
-        encoding: "utf-8",
-        timeout: 120_000,
-        maxBuffer: 1024 * 1024,
-        stdio: ["pipe", "pipe", "pipe"],
-        cwd: process.cwd(),
+    // Async spawn — non-blocking, avoids stalling the scheduler loop
+    import("node:child_process")
+      .then(({ exec }) => {
+        exec(
+          job.command,
+          {
+            timeout: 120_000,
+            maxBuffer: 1024 * 1024,
+            cwd: process.cwd(),
+            shell: process.platform === "win32" ? (process.env.ComSpec ?? "powershell.exe") : "/bin/bash",
+          },
+          (err: Error | null, stdout, stderr) => {
+            if (err) {
+              this.onEvent?.(job, { ok: false, output: stderr || err.message });
+            } else {
+              this.onEvent?.(job, { ok: true, output: stdout.slice(0, 5000) });
+            }
+          },
+        );
+      })
+      .catch((err: Error) => {
+        this.onEvent?.(job, { ok: false, output: err.message });
       });
-      this.onEvent?.(job, { ok: true, output: output.slice(0, 5000) });
-    } catch (err: unknown) {
-      this.onEvent?.(job, { ok: false, output: (err as Error).message });
-    }
   }
 
-  /** Compute next run time from a cron expression (approximate). */
+  /** Compute next run time from a cron expression. Handles DOW and DOM fields. */
   private computeNextRun(cronExpr: string): number {
     const fields = cronExpr.split(/\s+/);
     const now = new Date();
 
     if (fields.length === 6) {
-      // Seconds-level cron
       const sec = Number.parseInt(fields[0]!, 10);
-      now.setSeconds(now.getSeconds() + (Number.isNaN(sec) ? 60 : Math.max(1, sec)));
-    } else if (fields.length === 5) {
-      const minute = Number.parseInt(fields[0]!, 10);
-      const hour = Number.parseInt(fields[1]!, 10);
+      return now.getTime() + (Number.isNaN(sec) ? 60 : Math.max(1, sec)) * 1000;
+    }
 
-      if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
-        // Fixed time
-        const next = new Date(now);
-        next.setHours(hour, minute, 0, 0);
-        if (next <= now) next.setDate(next.getDate() + 1);
-        return next.getTime();
+    if (fields.length !== 5) return now.getTime() + 60_000;
+
+    const minuteField = fields[0]!;
+    const hourField = fields[1]!;
+    const domField = fields[2]!;
+    const monthField = fields[3]!;
+    const dowField = fields[4]!;
+
+    // Every N minutes: */N * * * *
+    if (minuteField.startsWith("*/")) {
+      const n = Number.parseInt(minuteField.slice(2), 10) || 1;
+      return now.getTime() + n * 60_000;
+    }
+
+    const minute = Number.parseInt(minuteField, 10);
+    const hour = Number.parseInt(hourField, 10);
+
+    // Fixed time: M H ... → find next matching time considering DOW
+    if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+      // Parse DOW: "1-5" (weekdays), "0,6" (weekends), "*" (any), or single number
+      const dowSet = parseField(dowField, 0, 6);
+      const domSet = parseField(domField, 1, 31);
+
+      const next = new Date(now);
+      next.setHours(hour, minute, 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+
+      // Advance until we find a matching DOW and DOM
+      for (let i = 0; i < 366; i++) {
+        const dow = next.getDay(); // 0=Sun, 6=Sat
+        const dom = next.getDate();
+        const month = next.getMonth() + 1;
+        const monthOk = monthField === "*" || matchField(monthField, month);
+        const dowOk = dowField === "*" || dowSet?.has(dow);
+        const domOk = domField === "*" || domSet?.has(dom);
+        if (dowOk && domOk && monthOk) return next.getTime();
+        next.setDate(next.getDate() + 1);
       }
-
-      if (fields[0]!.startsWith("*/")) {
-        // Every N minutes
-        const n = Number.parseInt(fields[0]!.slice(2), 10);
-        return now.getTime() + n * 60_000;
-      }
-
-      // Default: next minute
-      return now.getTime() + 60_000;
+      return now.getTime() + 60_000; // fallback
     }
 
     return now.getTime() + 60_000;

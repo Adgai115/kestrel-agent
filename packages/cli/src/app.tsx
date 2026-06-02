@@ -350,11 +350,11 @@ function Interaction({ messages, loading, error }: { messages: Message[]; loadin
           );
         }
         return (
-          <Text key={msg.id}>
+          <Text key={msg.id} color="white">
             <Text color="cyan" bold>
               {"  ›  "}
             </Text>
-            <Text color="white">{msg.content}</Text>
+            {msg.content}
           </Text>
         );
       })}
@@ -521,10 +521,11 @@ function ConfirmDialog({ request }: { request: ConfirmRequest }) {
       </Text>
       {entries.map(([k, v]) => {
         const val = typeof v === "string" ? (v.length > 60 ? `${v.slice(0, 57)}...` : v) : JSON.stringify(v);
+        const padded = k.padEnd(14);
         return (
           <Text dimColor key={k}>
             {"    "}
-            {k}: {val}
+            {padded}: {val}
           </Text>
         );
       })}
@@ -653,6 +654,8 @@ function App({ version, model, workspace, toolsCount: _tc, pendingTasks, trustLe
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const approvedScopes = useRef<Set<string>>(new Set());
   const lastConfirmTime = useRef<Map<string, number>>(new Map());
+  const confirmRef = useRef(confirmRequest);
+  confirmRef.current = confirmRequest;
   const currentOutput = useRef("");
   const fullResults = useRef<Map<number, string>>(new Map());
   const [_expandedResult, setExpandedResult] = useState<number | null>(null);
@@ -727,7 +730,7 @@ function App({ version, model, workspace, toolsCount: _tc, pendingTasks, trustLe
   useEffect(() => {
     const interval = setInterval(() => {
       const req = adapter.getPendingConfirm?.();
-      if (req && !confirmRequest) {
+      if (req && !confirmRef.current) {
         const key = scopeKey(req);
         if (approvedScopes.current.has(key)) {
           adapter.respondConfirm?.(true);
@@ -743,7 +746,7 @@ function App({ version, model, workspace, toolsCount: _tc, pendingTasks, trustLe
       }
     }, 50);
     return () => clearInterval(interval);
-  }, [adapter, confirmRequest]);
+  }, [adapter]);
 
   // Ctrl+C — cancel current inference, only exit on second press
   const loadingRef = useRef(loading);
@@ -790,7 +793,7 @@ function App({ version, model, workspace, toolsCount: _tc, pendingTasks, trustLe
           { id: _msgId++, role: "error", content: `Tool "${confirmRequest.tool}" denied by user` },
         ]);
         setConfirmRequest(null);
-        lastConfirmTime.current.set(confirmRequest.tool, Date.now());
+        lastConfirmTime.current.set(scopeKey(confirmRequest), Date.now());
       }
       return;
     }

@@ -149,6 +149,13 @@ const BUILTIN_TOOLS: ToolDefinition[] = [
     requiredPermissions: ["write"],
     toolType: "task_create",
   },
+  {
+    name: "channel_send",
+    description: "Send a message to a user through Feishu/Telegram/Slack/WebChat channel",
+    riskLevel: "medium",
+    requiredPermissions: ["write"],
+    toolType: "channel_send",
+  },
 ];
 
 export function createToolRegistry(customTools?: ToolDefinition[]): ToolRegistry {

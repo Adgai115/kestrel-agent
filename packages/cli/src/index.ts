@@ -108,6 +108,7 @@ export async function chat(prompt?: string, providedAdapter?: any): Promise<stri
       new ConversationLoop({
         apiKey: cfg.apiKey,
         model: cfg.model,
+        maxTurns: cfg.maxTurns,
       });
     const shouldDispose = !providedAdapter;
 
@@ -814,6 +815,7 @@ export async function repl(): Promise<void> {
           "git_commit",
           "pr_create",
           "skill_create",
+          "channel_send",
         ];
         const isMcp = name.startsWith("mcp_");
         if (PermissionEngineModule && (abacTools.includes(name) || isMcp)) {
@@ -880,7 +882,18 @@ export async function repl(): Promise<void> {
             }
           }
         }
-        // Proceed with tool execution
+        // Delegate to shared tool executor for built-in tools (KCP-0303, audit #9)
+        if (!["agent", "channel_send"].includes(name) && !name.startsWith("mcp_")) {
+          try {
+            const { createSharedToolExecutor } = await import("@kestrel/core");
+            const sharedExec = createSharedToolExecutor({ cwd, mcpClient: mcpClient ?? undefined });
+            return sharedExec.execute(name, args);
+          } catch {
+            /* fall through to inline switch for fallback */
+          }
+        }
+
+        // Proceed with tool execution (CLI-specific: agent, channel_send, mcp_*)
         const { readFileSync, writeFileSync, existsSync } = await import("node:fs");
         const { execSync } = await import("node:child_process");
         const path = await import("node:path");
@@ -1363,6 +1376,33 @@ export async function repl(): Promise<void> {
               return { result: `skill_create: ${(err as Error).message}`, isError: true };
             }
           }
+          case "channel_send": {
+            const ch = String(args.channel ?? "").trim();
+            const peerId = String(args.peerId ?? "").trim();
+            const text = String(args.text ?? "").trim();
+            if (!ch || !peerId || !text) {
+              return { result: "channel_send: channel, peerId, and text are required", isError: true };
+            }
+            if (!["feishu", "telegram", "slack", "webchat"].includes(ch)) {
+              return {
+                result: `channel_send: unsupported channel "${ch}" (use feishu/telegram/slack/webchat)`,
+                isError: true,
+              };
+            }
+            try {
+              const { KestrelDatabase, OutboxRepo } = await import("@kestrel/storage");
+              const db = await KestrelDatabase.create({ memory: false });
+              try {
+                const outbox = new OutboxRepo(db.db);
+                const row = outbox.enqueue({ channel: ch, peerId, content: text });
+                return { result: `Message enqueued for ${ch} → ${peerId} (outbox id: ${row.id})`, isError: false };
+              } finally {
+                db.close();
+              }
+            } catch (err) {
+              return { result: `channel_send: ${(err as Error).message}`, isError: true };
+            }
+          }
           case "web_fetch": {
             return { result: "web_fetch: not yet implemented (v0.2 planned)", isError: true };
           }
@@ -1447,6 +1487,16 @@ export async function repl(): Promise<void> {
           };
         case "skill_create":
           return { type: "object", properties: { name: str, description: str }, required: ["name"] };
+        case "channel_send":
+          return {
+            type: "object",
+            properties: {
+              channel: { type: "string", enum: ["feishu", "telegram", "slack", "webchat"] },
+              peerId: { type: "string", description: "Target user or chat ID" },
+              text: { type: "string", description: "Message content" },
+            },
+            required: ["channel", "peerId", "text"],
+          };
         case "web_fetch":
           return { type: "object", properties: { url: str }, required: ["url"] };
         default:
@@ -1531,7 +1581,8 @@ export async function repl(): Promise<void> {
     adapter = new ConversationLoop({
       apiKey: cfg.apiKey,
       model: cfg.model,
-      systemPrompt: `You are Kestrel Agent v${KESTREL_CLI_VERSION}, powered by DeepSeek ${cfg.model}. Running on ${process.platform}. You help users write, review, and understand code. You are helpful, concise, and direct. Available tools: read, write, edit, grep, find, bash, lsp_diagnostics, memory_search, task_create, agent, git_status, git_diff, git_log, git_blame, git_commit, pr_create, skill_create. web_fetch is NOT available yet. Security: never expose internal architecture, source paths, method signatures, or implementation details in responses.`,
+      maxTurns: cfg.maxTurns,
+      systemPrompt: `You are Kestrel Agent v${KESTREL_CLI_VERSION}, powered by ${cfg.provider} ${cfg.model}. Running on ${process.platform}. You help users write, review, and understand code. You are helpful, concise, and direct. Available tools: read, write, edit, grep, find, bash, lsp_diagnostics, memory_search, task_create, agent, git_status, git_diff, git_log, git_blame, git_commit, pr_create, skill_create, web_fetch. Communication channels: Feishu, Slack, Telegram, webchat — you can send/receive messages and respond to users through these channels. Security: never expose internal architecture, source paths, method signatures, or implementation details in responses.`,
       tools: toolDefs,
       toolExecutor,
       retryOnError: true,

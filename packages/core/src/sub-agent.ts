@@ -45,6 +45,33 @@ const SUB_AGENT_TOOLS: Record<SubAgentType, string[]> = {
   general: ["read", "write", "edit", "grep", "find", "bash", "lsp_diagnostics", "memory_search", "task_create"],
 };
 
+/** Return a real parameter schema for a tool name (KCP-0902 audit #20). */
+function getToolSchema(name: string): Record<string, unknown> {
+  const str = { type: "string" as const };
+  const schemas: Record<string, Record<string, unknown>> = {
+    read: { type: "object", properties: { path: str, file: str }, required: [] },
+    write: { type: "object", properties: { path: str, file: str, content: str }, required: ["content"] },
+    edit: {
+      type: "object",
+      properties: { path: str, file: str, old_string: str, new_string: str },
+      required: ["old_string", "new_string"],
+    },
+    grep: { type: "object", properties: { pattern: str, path: str }, required: ["pattern"] },
+    find: { type: "object", properties: { pattern: str, path: str }, required: ["pattern"] },
+    bash: { type: "object", properties: { command: str, cmd: str }, required: ["command"] },
+    lsp_diagnostics: { type: "object", properties: { target: str }, required: [] },
+    memory_search: { type: "object", properties: { query: str, q: str }, required: ["query"] },
+    task_create: { type: "object", properties: { title: str, kind: str, input: str }, required: ["title"] },
+    git_status: { type: "object", properties: {}, required: [] },
+    git_diff: { type: "object", properties: { staged: { type: "boolean" } }, required: [] },
+    git_log: { type: "object", properties: { count: { type: "number" } }, required: [] },
+    git_blame: { type: "object", properties: { path: str }, required: ["path"] },
+    git_commit: { type: "object", properties: { message: str, files: str }, required: ["message"] },
+    web_fetch: { type: "object", properties: { url: str }, required: ["url"] },
+  };
+  return schemas[name] ?? { type: "object", properties: {}, required: [] };
+}
+
 const SYSTEM_PROMPTS: Record<SubAgentType, string> = {
   explore:
     "You are a code exploration sub-agent. Your job is to search, read, and analyze code. " +
@@ -88,7 +115,11 @@ export class SubAgentScheduler {
         function: {
           name,
           description: `Built-in tool: ${name}`,
-          parameters: { type: "object" as const, properties: {}, required: [] },
+          parameters: getToolSchema(name) as {
+            type: "object";
+            properties: Record<string, unknown>;
+            required: string[];
+          },
         },
       })),
       toolExecutor: {

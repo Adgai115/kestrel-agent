@@ -56,6 +56,17 @@
         "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}"
       },
       "connectTimeout": 15000
+    },
+    "feishu": {
+      "description": "飞书 API：发送消息、查询用户信息、通道状态",
+      "command": "node",
+      "args": ["--import", "tsx", "packages/mcp/src/server/feishu.ts"],
+      "env": {
+        "FEISHU_APP_ID": "${FEISHU_APP_ID}",
+        "FEISHU_APP_SECRET": "${FEISHU_APP_SECRET}",
+        "FEISHU_ENCRYPT_KEY": "${FEISHU_ENCRYPT_KEY}"
+      },
+      "connectTimeout": 10000
     }
   },
   "usage": "Set KESTREL_MCP_COMMAND to one of the presets above, e.g.: $env:KESTREL_MCP_COMMAND='npx -y @anthropic/mcp-filesystem ./mcp-workspace'"

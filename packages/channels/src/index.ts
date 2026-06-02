@@ -3,6 +3,7 @@
  */
 
 export { FeishuAdapter, type FeishuConfig } from "./feishu.js";
+export { FeishuWSClient, type FeishuWSConfig, type FeishuWSEvent } from "./feishu-ws.js";
 export { SlackAdapter, type SlackConfig } from "./slack.js";
 export { TelegramAdapter, type TelegramConfig } from "./telegram.js";
 export type {

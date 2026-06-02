@@ -5,6 +5,8 @@
 export { KestrelDatabase, type StorageConfig } from "./database.js";
 export {
   type AuditEventRow,
+  ChannelConfigRepo,
+  type ChannelConfigRow,
   AuditRepo,
   MessageRepo,
   type MessageRow,
@@ -13,6 +15,8 @@ export {
   type SessionRow,
   TaskRepo,
   type TaskRow,
+  OutboxRepo,
+  type OutboxRow,
   TaskTimeline,
   ToolCallRepo,
   type ToolCallRow,

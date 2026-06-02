@@ -476,6 +476,161 @@ export class AuditRepo {
 }
 
 // ============================================================================
+// Channel Config Repository — persist channel credentials and status
+// ============================================================================
+
+export interface ChannelConfigRow {
+  channel: string;
+  enabled: number;
+  config_json: string | null;
+  status: string;
+  last_error: string | null;
+  last_connected_at: string | null;
+  last_error_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export class ChannelConfigRepo {
+  constructor(private db: SqlJsDatabase) {}
+
+  getAll(): ChannelConfigRow[] {
+    return execAll(this.db, "SELECT * FROM channel_config ORDER BY channel") as unknown as ChannelConfigRow[];
+  }
+
+  getByChannel(channel: string): ChannelConfigRow | undefined {
+    return execOne(this.db, "SELECT * FROM channel_config WHERE channel=?", [channel]) as unknown as
+      | ChannelConfigRow
+      | undefined;
+  }
+
+  upsert(params: {
+    channel: string;
+    enabled?: boolean;
+    configJson?: Record<string, unknown>;
+    status?: string;
+    lastError?: string;
+  }): ChannelConfigRow {
+    const existing = this.getByChannel(params.channel);
+    if (existing) {
+      const updates: string[] = ["updated_at=datetime('now')"];
+      const values: SqlValue[] = [];
+      if (params.enabled !== undefined) {
+        updates.push("enabled=?");
+        values.push(params.enabled ? 1 : 0);
+      }
+      if (params.configJson !== undefined) {
+        updates.push("config_json=?");
+        values.push(JSON.stringify(params.configJson));
+      }
+      if (params.status !== undefined) {
+        updates.push("status=?");
+        values.push(params.status);
+        if (params.status === "connected") {
+          updates.push("last_connected_at=datetime('now')");
+        }
+        if (params.status === "error") {
+          updates.push("last_error_at=datetime('now')");
+        }
+      }
+      if (params.lastError !== undefined) {
+        updates.push("last_error=?");
+        values.push(params.lastError);
+      }
+      values.push(params.channel);
+      execRun(this.db, `UPDATE channel_config SET ${updates.join(", ")} WHERE channel=?`, values);
+    } else {
+      execRun(
+        this.db,
+        `INSERT INTO channel_config (channel, enabled, config_json, status, last_error)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          params.channel,
+          params.enabled !== false ? 1 : 0,
+          params.configJson ? JSON.stringify(params.configJson) : null,
+          params.status ?? "unconfigured",
+          params.lastError ?? null,
+        ],
+      );
+    }
+    return this.getByChannel(params.channel)!;
+  }
+}
+
+// ============================================================================
+// Channel Outbox Repository — enqueue messages for delivery
+// ============================================================================
+
+export interface OutboxRow {
+  id: string;
+  channel: string;
+  peer_id: string;
+  content: string;
+  status: string;
+  retry_count: number;
+  max_retries: number;
+  last_error: string | null;
+  next_retry_at: string | null;
+  sent_at: string | null;
+  session_id: string | null;
+  task_id: string | null;
+  created_at: string;
+}
+
+export class OutboxRepo {
+  constructor(private db: SqlJsDatabase) {}
+
+  enqueue(params: {
+    channel: string;
+    peerId: string;
+    content: string;
+    sessionId?: string;
+    taskId?: string;
+  }): OutboxRow {
+    const id = randomUUID();
+    execRun(
+      this.db,
+      `INSERT INTO channel_outbox (id, channel, peer_id, content, session_id, task_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, params.channel, params.peerId, params.content, params.sessionId ?? null, params.taskId ?? null],
+    );
+    return execOne(this.db, "SELECT * FROM channel_outbox WHERE id=?", [id]) as unknown as OutboxRow;
+  }
+
+  listPending(limit = 50): OutboxRow[] {
+    return execAll(
+      this.db,
+      "SELECT * FROM channel_outbox WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at <= datetime('now')) ORDER BY created_at ASC LIMIT ?",
+      [limit],
+    ) as unknown as OutboxRow[];
+  }
+
+  markSent(id: string): void {
+    execRun(this.db, "UPDATE channel_outbox SET status='sent', sent_at=datetime('now') WHERE id=?", [id]);
+  }
+
+  markFailed(id: string, error: string): void {
+    execRun(
+      this.db,
+      "UPDATE channel_outbox SET status='failed', last_error=?, retry_count=retry_count+1, next_retry_at=datetime('now', '+30 seconds') WHERE id=?",
+      [error, id],
+    );
+  }
+
+  moveToDead(id: string): void {
+    const row = execOne(this.db, "SELECT * FROM channel_outbox WHERE id=?", [id]) as unknown as OutboxRow | undefined;
+    if (!row) return;
+    execRun(this.db, "UPDATE channel_outbox SET status='dead' WHERE id=?", [id]);
+    execRun(
+      this.db,
+      `INSERT INTO channel_dead_letter (original_id, channel, peer_id, content, last_error, retry_count)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [row.id, row.channel, row.peer_id, row.content, row.last_error, row.retry_count],
+    );
+  }
+}
+
+// ============================================================================
 // TaskTimeline — task_events timeline (KCP-0401)
 // ============================================================================
 

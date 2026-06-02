@@ -118,7 +118,7 @@ kestrel-agent/
 │   ├── lsp/              # LSP 集成
 │   ├── observability/    # 可观测性
 │   └── web-console/      # Web 控制台
-├── docs/                 # 文档
+├── docs/                 # 文档、审计报告
 ├── scripts/              # 验证与启动脚本
 └── biome.json            # Lint + 格式化配置
 ```

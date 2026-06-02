@@ -28,28 +28,38 @@ copy .env.example .env
 # 4. 构建项目
 pnpm build
 
-# 5. 验证安装
-node packages\cli\bin\kestrel.js doctor
+# 5. 注册全局命令
+npm link
+
+# 6. 验证安装
+kestrel doctor
 ```
 
-## 启动交互对话
+## 启动
 
 ```powershell
-# 开发模式 (TSX 热加载)
-pnpm dev
+# 一键启动 (Gateway + Web Console)
+.\scripts\start.ps1 -All
 
-# 或构建后运行
-node packages/cli/bin/kestrel.js
+# 或仅 Gateway
+.\scripts\start.ps1
+
+# 交互对话
+kestrel
 ```
+
+浏览器打开 `http://127.0.0.1:5173`，输入 Token 即可使用 Web Console。
 
 ## 常用命令
 
 | 命令 | 说明 |
 |------|------|
-| `kestrel chat` | 启动交互对话 (默认) |
+| `kestrel` | 启动交互对话 (默认) |
 | `kestrel doctor` | 系统健康检查 |
+| `kestrel doctor --deep` | 深度诊断 |
 | `kestrel version` | 查看版本 |
-| `kestrel gateway start` | 启动 Gateway API 服务 |
+| `kestrel gateway start` | 启动 Gateway API 服务 (端口 3100) |
+| `kestrel gateway status` | 检查 Gateway 状态 |
 | `kestrel task list` | 查看待处理任务 |
 | `kestrel memory search <关键词>` | 搜索记忆 |
 | `kestrel help` | 查看帮助 |
@@ -70,11 +80,13 @@ node packages/cli/bin/kestrel.js
 
 | 变量 | 默认值 | 说明 |
 |------|------|------|
-| `KESTREL_PROVIDER` | `deepseek` | LLM 供应商 (deepseek/openai/anthropic/google) |
+| `KESTREL_PROVIDER` | `deepseek` | LLM 供应商 |
 | `KESTREL_MODEL` | `deepseek-v4-pro` | 模型 ID |
 | `KESTREL_API_KEY` | — | API 密钥 (必填) |
+| `KESTREL_GATEWAY_HOST` | `127.0.0.1` | Gateway 监听地址 |
+| `KESTREL_GATEWAY_PORT` | `3100` | Gateway 监听端口 |
+| `KESTREL_GATEWAY_TOKEN` | (自动生成) | Gateway 鉴权 Token |
 | `KESTREL_HOME` | `.kestrel` | 数据目录 |
-| `KESTREL_PORT` | `3100` | Gateway 端口 |
 
 ## 常见问题
 

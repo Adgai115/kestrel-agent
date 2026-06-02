@@ -92,19 +92,28 @@ export function createSharedToolExecutor(ctx: ToolExecutorContext) {
         const filePath = String(args.path ?? args.file ?? "");
         const oldStr = String(args.old_string ?? args.find ?? "");
         const newStr = String(args.new_string ?? args.replace ?? "");
+        const replaceAll = args.replace_all === true;
         const resolved = path.resolve(cwd, filePath);
         if (!existsSync(resolved)) return { result: `File not found: ${filePath}`, isError: true };
         const orig = readFileSync(resolved, "utf-8");
         if (!orig.includes(oldStr)) return { result: "old_string not found in file", isError: true };
-        writeFileSync(resolved, orig.replace(oldStr, newStr), "utf-8");
-        return { result: `Replaced 1 occurrence in ${filePath}`, isError: false };
+        const count = orig.split(oldStr).length - 1;
+        if (count > 1 && !replaceAll) {
+          return {
+            result: `Found ${count} matches for old_string. Use replace_all: true to replace all.`,
+            isError: true,
+          };
+        }
+        const replaced = replaceAll ? orig.replaceAll(oldStr, newStr) : orig.replace(oldStr, newStr);
+        writeFileSync(resolved, replaced, "utf-8");
+        return { result: `Replaced ${replaceAll ? count : 1} occurrence(s) in ${filePath}`, isError: false };
       }
       case "bash": {
         const cmd = String(args.command ?? args.cmd ?? "");
         if (!cmd.trim()) return { result: "bash: empty command", isError: true };
         if (cmd.length > 10_000) return { result: "bash: command too long (max 10k chars)", isError: true };
         const dangers = detectBashDangers(cmd);
-        if (dangers.length > 0 && (cmd.includes("rm -rf /") || cmd.includes("mkfs.") || cmd.includes(":(){ "))) {
+        if (dangers.length > 0) {
           return { result: `bash: dangerous command blocked: ${dangers.join("; ")}`, isError: true };
         }
         try {
@@ -114,6 +123,7 @@ export function createSharedToolExecutor(ctx: ToolExecutorContext) {
             encoding: "utf-8",
             maxBuffer: 1024 * 1024,
             stdio: ["pipe", "pipe", "pipe"],
+            shell: process.platform === "win32" ? (process.env.ComSpec ?? "powershell.exe") : "/bin/bash",
           });
           return { result: output.slice(0, 10_000), isError: false };
         } catch (err: unknown) {
@@ -258,7 +268,7 @@ export function createSharedToolExecutor(ctx: ToolExecutorContext) {
         try {
           // @ts-ignore — optional workspace dep
           const { KestrelDatabase, TaskRepo, TaskTimeline } = await import("@kestrel/storage");
-          const db = await KestrelDatabase.create({ memory: true });
+          const db = await KestrelDatabase.create({ memory: false });
           const repo = new TaskRepo(db.db);
           const task = repo.create({
             title,
@@ -424,8 +434,18 @@ export function createSharedToolExecutor(ctx: ToolExecutorContext) {
           return { result: `skill_create: ${(err as Error).message}`, isError: true };
         }
       }
-      case "web_fetch":
-        return { result: "web_fetch: not yet implemented", isError: true };
+      case "web_fetch": {
+        const url = String(args.url ?? "");
+        if (!url.trim()) return { result: "web_fetch: url required", isError: true };
+        if (!/^https?:\/\//i.test(url)) return { result: "web_fetch: only http/https urls supported", isError: true };
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+          const text = await res.text();
+          return { result: text.slice(0, 50_000), isError: false };
+        } catch (err: unknown) {
+          return { result: `web_fetch: ${(err as Error).message}`, isError: true };
+        }
+      }
       default: {
         // MCP tool delegation
         if (ctx.mcpClient && name.startsWith("mcp_")) {

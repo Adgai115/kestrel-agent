@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.1.0 (2026-06-02) — Remediation
+
+### Core
+- Closed the 20-item bug remediation plan from `kestrel-bug-remediation-2026-06-02.md`.
+- Added explicit unsupported-provider errors for Anthropic/Google until non-OpenAI-compatible clients are implemented.
+- Fixed `maxTurns` loop accounting, `web_fetch`, bash danger blocking, multi-match edit handling, shared tool execution, redaction edge cases, ABAC edit preview keys, and sub-agent tool schemas.
+
+### Gateway / MCP / Channels
+- Fixed per-request chat isolation, Gateway database reuse, session count derivation, expired confirmation cleanup, and confirmation/runtime diagnostics paths.
+- Switched MCP stdio framing to newline-delimited JSON and isolated MCP call timeouts.
+- Added Feishu WebSocket exponential backoff and complete ACK coverage.
+
+### Cron / CLI
+- Added DOW/DOM/month handling to cron next-run calculation and moved cron command execution off the scheduler loop.
+- Normalized Gateway env var handling and verified CLI command matrix for release-critical commands.
+
+### Release Quality
+- Updated Biome scan boundaries to ignore local `.claude` nested worktrees.
+- Added release audit evidence for build, verify, targeted package tests, MCP integration, Gateway E2E, CLI matrix, stress testing, and secret scan.
+
+---
+
 ## v1.0.0 (2026-06-01) — Production
 
 ### Core

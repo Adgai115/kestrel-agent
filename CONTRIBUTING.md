@@ -10,7 +10,7 @@ pnpm build     # build all packages
 
 ## Development Workflow
 
-1. Pick or open a GitHub issue for the change
+1. Pick a scoped issue, proposal, or maintainer-approved task
 2. Create your changes
 3. Run `.\scripts\verify.ps1` — must be 4/4 PASS
 4. Commit — pre-commit hook scans for secrets automatically

@@ -29,20 +29,14 @@ const REDACT_PATTERNS: Array<[RegExp, string]> = [
 export function redact(input: string): { text: string; count: number } {
   let count = 0;
   let text = input;
-  for (const [pattern] of REDACT_PATTERNS) {
+  for (const [pattern, replacement] of REDACT_PATTERNS) {
     const matches = text.match(pattern);
     if (matches) {
       count += matches.length;
-      text = text.replace(pattern, (match) => {
-        // For patterns with replacement strings that contain "$&",
-        // use a fixed replacement instead
-        for (const [p, repl] of REDACT_PATTERNS) {
-          if (p.source === pattern.source && repl !== "$&") {
-            return repl;
-          }
-        }
-        return match.length > 20 ? `${match.slice(0, 4)}***` : "***";
-      });
+      // $& means "keep original" — only count, don't redact (false-positive prone)
+      if (replacement !== "$&") {
+        text = text.replace(pattern, replacement);
+      }
     }
   }
   return { text, count };
@@ -52,7 +46,11 @@ export function redact(input: string): { text: string; count: number } {
  * Check if a string contains potential secrets.
  */
 export function containsSecrets(input: string): boolean {
-  return REDACT_PATTERNS.some(([p]) => p.test(input));
+  for (const [p] of REDACT_PATTERNS) {
+    p.lastIndex = 0; // reset global regex state between calls
+    if (p.test(input)) return true;
+  }
+  return false;
 }
 
 /**

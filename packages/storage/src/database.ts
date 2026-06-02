@@ -19,10 +19,31 @@ export class KestrelDatabase {
   db: SqlJsDatabase;
   readonly dbPath: string;
   private _closed = false;
+  private static _instances = new Map<string, KestrelDatabase>();
 
   private constructor(db: SqlJsDatabase, dbPath: string) {
     this.db = db;
     this.dbPath = dbPath;
+  }
+
+  /** Reuse a shared database instance (singleton per path). */
+  static async getInstance(config: StorageConfig = {}): Promise<KestrelDatabase> {
+    const cwd = config.cwd ?? process.cwd();
+    const rawPath = config.dbPath ?? ".kestrel/kestrel.db";
+    const fullPath = rawPath.startsWith(".") ? `${cwd}/${rawPath}` : rawPath;
+    const key = config.memory ? ":memory:" : fullPath;
+
+    const existing = KestrelDatabase._instances.get(key);
+    if (existing && !existing._closed) return existing;
+
+    const instance = await KestrelDatabase.create(config);
+    if (!config.memory) KestrelDatabase._instances.set(key, instance);
+    return instance;
+  }
+
+  /** Clear instance cache (useful for tests). */
+  static clearCache(): void {
+    KestrelDatabase._instances.clear();
   }
 
   static async create(config: StorageConfig = {}): Promise<KestrelDatabase> {

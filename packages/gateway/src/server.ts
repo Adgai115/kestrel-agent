@@ -99,10 +99,15 @@ export class KestrelGateway {
   readonly server: FastifyInstance;
   readonly config: Required<GatewayConfig>;
   private startedAt = 0;
-  private sessions = 0;
   private sessionMap = new Map<string, TrackedSession>();
   readonly confirmations = new Map<string, PendingConfirmation>();
   private statusCache: StatusCache | null = null;
+  private feishuWS: unknown = null;
+
+  /** CODE-6: derive from Map to eliminate counter race. */
+  private get sessionCount(): number {
+    return this.sessionMap.size;
+  }
   private readonly STATUS_CACHE_TTL = 15_000; // 15s freshness
   private readonly STATUS_CACHE_STALE = 120_000; // 2min max age
 
@@ -228,7 +233,7 @@ export class KestrelGateway {
 
     // KCP-0102: Readiness (no auth) — server can accept traffic
     this.server.get("/ready", async () => {
-      const degraded = this.sessions < 0; // future: check deps
+      const degraded = this.sessionCount < 0; // future: check deps
       return { status: degraded ? ("degraded" as const) : ("ok" as const), uptime: Date.now() - this.startedAt };
     });
 
@@ -236,7 +241,7 @@ export class KestrelGateway {
     this.server.get("/health", async () => ({
       status: "ok" as const,
       uptime: Date.now() - this.startedAt,
-      sessions: this.sessions,
+      sessions: this.sessionCount,
       version: "0.0.1",
     }));
 
@@ -251,7 +256,7 @@ export class KestrelGateway {
       const data: GatewayStatus = {
         status: "ok",
         uptime: now - this.startedAt,
-        sessions: this.sessions,
+        sessions: this.sessionCount,
         tokenPrefix: this.config.token.slice(0, 8),
       };
       this.statusCache = { data, fetchedAt: now, validUntil: now + this.STATUS_CACHE_TTL };
@@ -284,7 +289,7 @@ export class KestrelGateway {
       return {
         status: "ok",
         uptime: Date.now() - this.startedAt,
-        sessions: this.sessions,
+        sessions: this.sessionCount,
         pendingConfirmations: [...this.confirmations.values()].filter((c) => !c.resolved).length,
         identity: {
           machineId: id.machineId,
@@ -371,6 +376,48 @@ export class KestrelGateway {
             rows: rows.length > 0 ? rows[0]!.values : [],
             count: rows.length > 0 ? rows[0]!.values.length : 0,
           };
+        } finally {
+          db.close();
+        }
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    });
+
+    // TASK-1132: Channel configuration persistence
+    this.server.get("/channels", async () => {
+      try {
+        const { KestrelDatabase, ChannelConfigRepo } = await import("@kestrel/storage");
+        const db = await KestrelDatabase.create({ memory: false });
+        try {
+          const repo = new ChannelConfigRepo(db.db);
+          const configs = repo.getAll();
+          return { channels: configs };
+        } finally {
+          db.close();
+        }
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    });
+
+    this.server.put("/channels/:name", async (request) => {
+      const ch = (request.params as { name: string }).name;
+      if (!["feishu", "telegram", "slack", "webchat"].includes(ch)) {
+        return { error: `Unknown channel: ${ch}` };
+      }
+      try {
+        const { KestrelDatabase, ChannelConfigRepo } = await import("@kestrel/storage");
+        const db = await KestrelDatabase.create({ memory: false });
+        try {
+          const repo = new ChannelConfigRepo(db.db);
+          const body = request.body as Record<string, unknown> | undefined;
+          const row = repo.upsert({
+            channel: ch,
+            enabled: body?.enabled as boolean | undefined,
+            configJson: body?.config as Record<string, unknown> | undefined,
+          });
+          return { channel: row };
         } finally {
           db.close();
         }
@@ -519,7 +566,7 @@ export class KestrelGateway {
 
       const sessionId = randomUUID();
       this.sessionMap.set(sessionId, { id: sessionId, type: "sse", connectedAt: Date.now() });
-      this.sessions++;
+      this.sessionMap.set(sessionId, { id: sessionId, type: "sse" as const, connectedAt: Date.now() });
       send({ type: "connected", sessionId });
 
       const keepAlive = setInterval(() => {
@@ -527,7 +574,6 @@ export class KestrelGateway {
       }, 15_000);
 
       request.raw.on("close", () => {
-        this.sessions--;
         this.sessionMap.delete(sessionId);
         clearInterval(keepAlive);
       });
@@ -554,7 +600,7 @@ export class KestrelGateway {
 
       const sessionId = randomUUID();
       this.sessionMap.set(sessionId, { id: sessionId, type: "sse", connectedAt: Date.now() });
-      this.sessions++;
+      this.sessionMap.set(sessionId, { id: sessionId, type: "sse" as const, connectedAt: Date.now() });
       send({ type: "connected", sessionId });
 
       try {
@@ -563,7 +609,6 @@ export class KestrelGateway {
       } catch (err) {
         send({ type: "error", message: (err as Error).message });
       } finally {
-        this.sessions--;
         this.sessionMap.delete(sessionId);
         reply.raw.end();
       }
@@ -598,8 +643,6 @@ export class KestrelGateway {
 
         const sessionId = randomUUID();
         this.sessionMap.set(sessionId, { id: sessionId, type: "ws", connectedAt: Date.now() });
-        this.sessions++;
-
         const send = (event: Record<string, unknown>) => {
           socket.send(JSON.stringify(event));
         };
@@ -630,7 +673,6 @@ export class KestrelGateway {
         });
 
         socket.on("close", () => {
-          this.sessions--;
           this.sessionMap.delete(sessionId);
         });
 
@@ -642,6 +684,73 @@ export class KestrelGateway {
   async start(): Promise<void> {
     await this.setup();
     this.startedAt = Date.now();
+
+    // TASK-1132: Seed channel configs from env vars on startup
+    try {
+      const { KestrelDatabase, ChannelConfigRepo } = await import("@kestrel/storage");
+      const db = await KestrelDatabase.create({ memory: false });
+      try {
+        const repo = new ChannelConfigRepo(db.db);
+        const seedEnv = (ch: string, envKeys: string[]) => {
+          const cfg: Record<string, string> = {};
+          for (const key of envKeys) {
+            const val = process.env[key];
+            if (val) cfg[key] = val;
+          }
+          if (Object.keys(cfg).length > 0) {
+            repo.upsert({ channel: ch, configJson: cfg, status: "connected" });
+          }
+        };
+        seedEnv("feishu", ["KESTREL_FEISHU_APP_ID", "KESTREL_FEISHU_APP_SECRET", "KESTREL_FEISHU_ENCRYPT_KEY"]);
+        seedEnv("telegram", ["KESTREL_TELEGRAM_BOT_TOKEN"]);
+        seedEnv("slack", ["KESTREL_SLACK_BOT_TOKEN", "KESTREL_SLACK_SIGNING_SECRET"]);
+        seedEnv("webchat", []);
+        // webchat always available
+        repo.upsert({ channel: "webchat", enabled: true, status: "connected" });
+      } finally {
+        db.close();
+      }
+    } catch {
+      // channel config persistence is non-blocking
+    }
+
+    // TASK-1136: Start Feishu WebSocket long-connection event receiver
+    const feishuAppId = process.env.FEISHU_APP_ID ?? process.env.KESTREL_FEISHU_APP_ID;
+    const feishuAppSecret = process.env.FEISHU_APP_SECRET ?? process.env.KESTREL_FEISHU_APP_SECRET;
+    if (feishuAppId && feishuAppSecret) {
+      try {
+        const { FeishuWSClient } = await import("@kestrel/channels");
+        const client = new FeishuWSClient({
+          appId: feishuAppId,
+          appSecret: feishuAppSecret,
+          onEvent: (event) => {
+            const peerId = event.peerId ?? "";
+            if (event.type === "message" && peerId) {
+              import("@kestrel/storage")
+                .then(({ KestrelDatabase }) =>
+                  KestrelDatabase.create({ memory: false }).then((db) => {
+                    try {
+                      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+                      db.db.run(
+                        "INSERT OR IGNORE INTO channel_inbox (id, channel, peer_id, message_id, content, status) VALUES (?, 'feishu', ?, ?, ?, 'received')",
+                        [id, peerId, event.timestamp ?? "", event.text ?? ""],
+                      );
+                    } finally {
+                      db.close();
+                    }
+                  }),
+                )
+                .catch(() => {});
+            }
+          },
+        });
+        client.start();
+        this.feishuWS = client;
+        console.log("[FeishuWS] Long-connection event receiver started");
+      } catch (err) {
+        console.log(`[FeishuWS] Failed to start: ${(err as Error).message}`);
+      }
+    }
 
     await this.server.listen({
       host: this.config.host,
@@ -655,6 +764,14 @@ export class KestrelGateway {
   }
 
   async stop(): Promise<void> {
+    if (this.feishuWS) {
+      try {
+        await (this.feishuWS as { stop: () => Promise<void> }).stop();
+        this.feishuWS = null;
+      } catch {
+        // non-blocking
+      }
+    }
     await this.server.close();
   }
 
@@ -684,7 +801,7 @@ export class KestrelGateway {
           id: request.id,
           result: {
             uptime: Date.now() - this.startedAt,
-            sessions: this.sessions,
+            sessions: this.sessionCount,
           },
         };
       case "chat": {

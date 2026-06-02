@@ -29,7 +29,8 @@ export type Tool =
   | "git_diff"
   | "git_log"
   | "git_blame"
-  | "git_commit";
+  | "git_commit"
+  | "channel_send";
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 export type Decision = "allow" | "ask" | "deny";
 export type TrustLevel = "local" | "trusted" | "limited" | "unknown";
@@ -84,6 +85,8 @@ export function getToolRisk(tool: Tool): RiskLevel {
     case "git_commit":
     case "pr_create":
       return "high";
+    case "channel_send":
+      return "medium";
     default:
       return "critical";
   }

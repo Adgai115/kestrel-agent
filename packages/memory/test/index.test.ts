@@ -78,7 +78,7 @@ describe("@kestrel/memory", () => {
           name: "leak",
           description: "d",
           type: "project",
-          content: "password=12345678",
+          content: "token: abcdefgh12345678",
           createdAt: "",
           updatedAt: "",
         },
@@ -92,7 +92,7 @@ describe("@kestrel/memory", () => {
       setupEngine().propose(
         {
           name: "leak2",
-          description: "token: abc12345",
+          description: "token: abcdefgh12345678",
           type: "project",
           content: "safe",
           createdAt: "",

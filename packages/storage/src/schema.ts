@@ -3,6 +3,7 @@
  */
 
 import type { Database as SqlJsDatabase } from "sql.js";
+import { CHANNEL_CONFIG_SCHEMA } from "./channel-config.schema.js";
 import { CHANNEL_QUEUE_SCHEMA } from "./channel-queue.schema.js";
 import { CRON_SCHEMA } from "./cron.schema.js";
 
@@ -108,6 +109,8 @@ const MIGRATIONS: Record<number, string[]> = {
   ],
   // KCP-0501 + KCP-0601: channel queue + durable cron
   2: [...CHANNEL_QUEUE_SCHEMA, ...CRON_SCHEMA],
+  // TASK-1132: channel configuration persistence
+  3: [...CHANNEL_CONFIG_SCHEMA],
 };
 
 export function runMigrations(db: SqlJsDatabase): void {
