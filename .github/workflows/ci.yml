@@ -18,6 +18,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:security
@@ -32,4 +33,5 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @kestrel/sandbox build
       - run: pnpm --filter @kestrel/sandbox test

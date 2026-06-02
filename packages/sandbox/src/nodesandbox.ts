@@ -52,6 +52,7 @@ export class NodeSandbox implements SandboxExecutor {
         env,
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
+        detached: process.platform !== "win32",
       });
 
       let stdout = "";
@@ -69,7 +70,11 @@ export class NodeSandbox implements SandboxExecutor {
             windowsHide: true,
           });
         } else {
-          child.kill("SIGKILL");
+          try {
+            if (child.pid) process.kill(-child.pid, "SIGKILL");
+          } catch {
+            child.kill("SIGKILL");
+          }
         }
       }, timeoutMs);
 
