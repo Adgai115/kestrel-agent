@@ -12,7 +12,7 @@
     "check": "pnpm lint && pnpm typecheck",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r build && pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:security": "pnpm --filter @kestrel/storage test && pnpm --filter @kestrel/permissions test && pnpm --filter @kestrel/channels test && pnpm --filter @kestrel/memory test",
     "clean": "pnpm -r clean",
