@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/sql.js": "1.4.11",
     "typescript": "^5.9.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "sql.js": "1.14.1"

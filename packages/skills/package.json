@@ -17,10 +17,9 @@
     "test": "vitest run",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
   "devDependencies": {
     "@kestrel/permissions": "workspace:*",
     "typescript": "^5.9.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.8"
   }
 }
