@@ -1,0 +1,42 @@
+{
+  "name": "@kestrel/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "lingtai": "./bin/kestrel.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node bin/kestrel.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@kestrel/core": "workspace:*",
+    "@kestrel/gateway": "workspace:*",
+    "@kestrel/lsp": "workspace:*",
+    "@kestrel/mcp": "workspace:*",
+    "@kestrel/memory": "workspace:*",
+    "@kestrel/observability": "workspace:*",
+    "@kestrel/permissions": "workspace:*",
+    "@kestrel/skills": "workspace:*",
+    "@kestrel/storage": "workspace:*",
+    "@kestrel/tools": "workspace:*",
+    "ink": "^7.0.5",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

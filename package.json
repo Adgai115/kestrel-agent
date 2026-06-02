@@ -1,0 +1,41 @@
+{
+  "name": "kestrel-agent",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "bin": {
+    "kestrel": "./bin/kestrel.js"
+  },
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "pnpm -r build",
+    "check": "pnpm lint && pnpm typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:security": "pnpm --filter @kestrel/storage test && pnpm --filter @kestrel/permissions test && pnpm --filter @kestrel/channels test && pnpm --filter @kestrel/memory test",
+    "clean": "pnpm -r clean",
+    "setup": "node scripts/setup.mjs",
+    "dev": "node --no-warnings --conditions development --import tsx packages/cli/bin/kestrel.js",
+    "kestrel": "node --no-warnings --conditions development --import tsx packages/cli/bin/kestrel.js",
+    "dev:build": "pnpm build && pnpm --filter @kestrel/cli start",
+    "gateway:start": "pnpm --filter @kestrel/gateway start",
+    "gateway:dev": "pnpm --filter @kestrel/gateway dev",
+    "repl": "pnpm --filter @kestrel/cli start"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.0.0",
+    "@types/react": "19.2.15",
+    "ink": "7.0.5",
+    "react": "19.2.6",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "packageManager": "pnpm@10.0.0"
+}

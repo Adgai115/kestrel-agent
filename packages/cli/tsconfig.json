@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "jsx": "react-jsx"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../gateway" },
+    { "path": "../memory" },
+    { "path": "../permissions" },
+    { "path": "../skills" },
+    { "path": "../storage" },
+    { "path": "../mcp" },
+    { "path": "../tools" }
+  ]
+}

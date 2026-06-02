@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+.agent-memory/
+.kestrel/
+*.log
+.turbo/
+coverage/
+output/
+.playwright-cli/

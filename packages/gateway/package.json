@@ -1,0 +1,35 @@
+{
+  "name": "@kestrel/gateway",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/bin.js",
+    "dev": "npx tsx src/bin.ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.2.0",
+    "@fastify/rate-limit": "10.3.0",
+    "@fastify/websocket": "11.2.0",
+    "@kestrel/channels": "workspace:*",
+    "@kestrel/core": "workspace:*",
+    "@kestrel/storage": "workspace:*",
+    "fastify": "5.8.5"
+  }
+}

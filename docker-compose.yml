@@ -1,0 +1,66 @@
+# Kestrel Agent — docker-compose profiles
+#   dev:  docker compose --profile dev up
+#   prod: docker compose --profile prod up -d
+
+services:
+  gateway:
+    image: kestrel-agent:latest
+    build: .
+    container_name: kestrel-gateway
+    ports:
+      - "${KESTREL_PORT:-3100}:3100"
+    environment:
+      - KESTREL_API_KEY=${KESTREL_API_KEY}
+      - KESTREL_GATEWAY_TOKEN=${KESTREL_GATEWAY_TOKEN:-}
+      - KESTREL_MODEL=${KESTREL_MODEL:-deepseek-v4-pro}
+    volumes:
+      - ./.kestrel:/app/.kestrel
+      - ./.agent-memory:/app/.agent-memory
+    restart: unless-stopped
+    profiles:
+      - prod
+
+  gateway-dev:
+    image: kestrel-agent:latest
+    build: .
+    container_name: kestrel-gateway-dev
+    ports:
+      - "${KESTREL_PORT:-3101}:3100"
+    environment:
+      - KESTREL_API_KEY=${KESTREL_API_KEY}
+      - KESTREL_GATEWAY_TOKEN=dev-token
+      - KESTREL_MODEL=deepseek-chat
+    volumes:
+      - ./packages:/app/packages:ro
+      - ./.kestrel:/app/.kestrel
+    command: ["npx", "tsx", "packages/gateway/src/bin.ts"]
+    profiles:
+      - dev
+
+  web-console:
+    image: kestrel-agent:latest
+    build: .
+    container_name: kestrel-web
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    environment:
+      - KESTREL_GATEWAY_URL=http://gateway:3100
+    depends_on:
+      - gateway
+    command: ["npx", "vite", "preview", "--port", "5173", "--host", "0.0.0.0"]
+    working_dir: /app/packages/web-console/frontend
+    profiles:
+      - prod
+
+  web-console-dev:
+    image: kestrel-agent:latest
+    build: .
+    container_name: kestrel-web-dev
+    ports:
+      - "${WEB_DEV_PORT:-5174}:5173"
+    depends_on:
+      - gateway-dev
+    command: ["npx", "vite", "--port", "5173", "--host", "0.0.0.0"]
+    working_dir: /app/packages/web-console/frontend
+    profiles:
+      - dev

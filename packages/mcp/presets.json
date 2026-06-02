@@ -1,0 +1,62 @@
+{
+  "presets": {
+    "filesystem": {
+      "description": "Read, write, and list files in a sandboxed directory",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-filesystem", "${MCP_SANDBOX_DIR:-./mcp-sandbox}"],
+      "env": {
+        "MCP_SANDBOX_DIR": "./mcp-sandbox"
+      },
+      "connectTimeout": 10000
+    },
+    "github": {
+      "description": "GitHub API: issues, PRs, repos, search, gists",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "connectTimeout": 15000
+    },
+    "postgres": {
+      "description": "PostgreSQL database query and schema inspection",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-postgres"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      },
+      "connectTimeout": 10000
+    },
+    "puppeteer": {
+      "description": "Headless browser for web scraping and screenshots",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-puppeteer"],
+      "connectTimeout": 30000
+    },
+    "brave-search": {
+      "description": "Web search via Brave Search API",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "connectTimeout": 15000
+    },
+    "memory": {
+      "description": "Persistent knowledge graph for context retention across sessions",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-memory"],
+      "connectTimeout": 10000
+    },
+    "slack": {
+      "description": "Slack workspace integration: channels, messages, users",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}"
+      },
+      "connectTimeout": 15000
+    }
+  },
+  "usage": "Set KESTREL_MCP_COMMAND to one of the presets above, e.g.: $env:KESTREL_MCP_COMMAND='npx -y @anthropic/mcp-filesystem ./mcp-workspace'"
+}

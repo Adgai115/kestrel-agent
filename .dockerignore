@@ -1,0 +1,13 @@
+.git
+.github
+.playwright-cli
+.kestrel
+node_modules
+**/node_modules
+**/dist
+output
+.env
+.env.*
+*.log
+*.tmp
+*.tsbuildinfo
